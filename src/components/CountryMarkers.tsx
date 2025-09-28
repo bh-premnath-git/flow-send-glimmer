@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from '@react-three/drei';
+import { Billboard, Text } from '@react-three/drei';
 
 interface CountryMarker {
   code: string;
@@ -38,18 +38,50 @@ const CountryMarkers: React.FC<CountryMarkersProps> = ({
               />
             </mesh>
             
-            {/* Country label */}
-            <Text
-              position={[marker.position[0], marker.position[1] + 0.2, marker.position[2]]}
-              fontSize={0.1}
-              color={isActive ? '#ffffff' : '#94a3b8'}
-              anchorX="center"
-              anchorY="middle"
-              fontWeight={isActive ? "bold" : "normal"}
+            {/* Country label and badge */}
+            <Billboard
+              position={marker.position}
+              follow={true}
+              lockX={false}
+              lockY={false}
+              lockZ={false}
             >
-              {marker.code}
-            </Text>
-            
+              <Text
+                position={[0, 0.2, 0]}
+                fontSize={0.1}
+                color={isActive ? '#ffffff' : '#94a3b8'}
+                anchorX="center"
+                anchorY="middle"
+                fontWeight={isActive ? "bold" : "normal"}
+              >
+                {marker.code}
+              </Text>
+
+              {/* Transfer count badge */}
+              {transferCount > 0 && (
+                <group position={[0, 0.4, 0]}>
+                  <mesh>
+                    <planeGeometry args={[badgeWidth, 0.22]} />
+                    <meshBasicMaterial
+                      color={isActive ? '#2563eb' : '#0f172a'}
+                      transparent
+                      opacity={isActive ? 0.95 : 0.7}
+                    />
+                  </mesh>
+                  <Text
+                    position={[0, 0, 0.01]}
+                    fontSize={0.12}
+                    color="#ffffff"
+                    anchorX="center"
+                    anchorY="middle"
+                    fontWeight="bold"
+                  >
+                    {transferCount}
+                  </Text>
+                </group>
+              )}
+            </Billboard>
+
             {/* Glow effect for active countries */}
             {isActive && (
               <mesh position={marker.position}>
@@ -62,29 +94,6 @@ const CountryMarkers: React.FC<CountryMarkersProps> = ({
               </mesh>
             )}
 
-            {/* Transfer count badge */}
-            {transferCount > 0 && (
-              <group position={[marker.position[0], marker.position[1] + 0.4, marker.position[2]]}>
-                <mesh>
-                  <planeGeometry args={[badgeWidth, 0.22]} />
-                  <meshBasicMaterial
-                    color={isActive ? '#2563eb' : '#0f172a'}
-                    transparent
-                    opacity={isActive ? 0.95 : 0.7}
-                  />
-                </mesh>
-                <Text
-                  position={[0, 0, 0.01]}
-                  fontSize={0.12}
-                  color="#ffffff"
-                  anchorX="center"
-                  anchorY="middle"
-                  fontWeight="bold"
-                >
-                  {transferCount}
-                </Text>
-              </group>
-            )}
           </group>
         );
       })}
