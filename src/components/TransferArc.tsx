@@ -91,6 +91,22 @@ const TransferArc: React.FC<TransferArcProps> = ({
   const startOpacity = status === 'completed' ? 0.6 : status === 'pending' ? 0.75 : 1;
   const destinationReached = status === 'completed' || animationProgress > 0.8;
 
+  const [labelPlanePosition, labelTextPosition] = useMemo(() => {
+    const basePosition: [number, number, number] = [
+      endPoint[0],
+      endPoint[1] + 0.4,
+      endPoint[2]
+    ];
+
+    const textPosition: [number, number, number] = [
+      basePosition[0],
+      basePosition[1],
+      basePosition[2] + 0.01
+    ];
+
+    return [basePosition, textPosition];
+  }, [endPoint]);
+
   return (
     <group>
       {/* Arc line - only show if we have progress */}
@@ -139,7 +155,7 @@ const TransferArc: React.FC<TransferArcProps> = ({
       {/* Currency label at destination - using Text from drei */}
       {status === 'active' && animationProgress > 0.8 && (
         <Text
-          position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}
+          position={labelTextPosition}
           fontSize={0.15}
           color="#ffffff"
           anchorX="center"
@@ -152,7 +168,7 @@ const TransferArc: React.FC<TransferArcProps> = ({
 
       {/* Background for currency text */}
       {status === 'active' && animationProgress > 0.8 && (
-        <mesh position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}>
+        <mesh position={labelPlanePosition}>
           <planeGeometry args={[1, 0.3]} />
           <meshBasicMaterial
             color={color}
