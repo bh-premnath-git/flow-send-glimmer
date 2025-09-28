@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre';
+import type { MapViewState } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { TransferHistoryEntry } from '../types/transfers';
@@ -101,13 +102,15 @@ const formatRelativeTime = (timestamp: number) => {
   return `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
 };
 
-const defaultViewState = {
+const defaultViewState: MapViewState = {
   longitude: 0,
   latitude: 0,
   zoom: 1,
   bearing: 0,
   pitch: 0,
   padding: { top: 0, bottom: 0, left: 0, right: 0 },
+  width: 800,
+  height: 600,
 };
 
 const MoneyTransferApp: React.FC = () => {
@@ -118,8 +121,8 @@ const MoneyTransferApp: React.FC = () => {
   });
   const [animationProgress, setAnimationProgress] = useState(0);
   const [isTransferring, setIsTransferring] = useState(false);
-  const [viewState, setViewState] = useState(defaultViewState);
-  const initialViewStateRef = useRef(defaultViewState);
+  const [viewState, setViewState] = useState<MapViewState>(defaultViewState);
+  const initialViewStateRef = useRef<MapViewState>(defaultViewState);
 
   const sortedHistory = useMemo(
     () =>
@@ -253,9 +256,6 @@ const MoneyTransferApp: React.FC = () => {
       longitude: centerLon,
       latitude: centerLat,
       zoom,
-      bearing: prev.bearing,
-      pitch: prev.pitch,
-      padding: prev.padding,
     }));
   }, [animatingCoordinates]);
 
@@ -404,20 +404,10 @@ const MoneyTransferApp: React.FC = () => {
                 initialViewState={initialViewStateRef.current}
                 viewState={viewState}
                 onMove={(event) => {
-                  const vs = event.viewState;
-                  setViewState({
-                    longitude: vs.longitude,
-                    latitude: vs.latitude,
-                    zoom: vs.zoom,
-                    bearing: vs.bearing,
-                    pitch: vs.pitch,
-                    padding: {
-                      top: vs.padding?.top ?? 0,
-                      bottom: vs.padding?.bottom ?? 0,
-                      left: vs.padding?.left ?? 0,
-                      right: vs.padding?.right ?? 0,
-                    },
-                  });
+                  setViewState((prev) => ({
+                    ...prev,
+                    ...event.viewState,
+                  }));
                 }}
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
