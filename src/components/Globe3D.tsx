@@ -8,12 +8,14 @@ interface Globe3DProps {
   autoRotate?: boolean;
   rotationSpeed?: number;
   activeCountries?: string[];
+  transferCounts?: Record<string, number>;
 }
 
-const Globe3D: React.FC<Globe3DProps> = ({ 
-  autoRotate = true, 
+const Globe3D: React.FC<Globe3DProps> = ({
+  autoRotate = true,
   rotationSpeed = 0.005,
-  activeCountries = []
+  activeCountries = [],
+  transferCounts = {}
 }) => {
   const globeRef = useRef<Mesh>(null);
 
@@ -83,9 +85,10 @@ const Globe3D: React.FC<Globe3DProps> = ({
       </mesh>
       
       {/* Country Markers */}
-      <CountryMarkers 
+      <CountryMarkers
         markers={countryMarkers}
         activeCountries={activeCountries}
+        transferCounts={transferCounts}
       />
       
       {/* Lighting */}

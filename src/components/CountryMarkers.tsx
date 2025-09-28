@@ -11,17 +11,21 @@ interface CountryMarker {
 interface CountryMarkersProps {
   markers: CountryMarker[];
   activeCountries?: string[];
+  transferCounts?: Record<string, number>;
 }
 
-const CountryMarkers: React.FC<CountryMarkersProps> = ({ 
-  markers, 
-  activeCountries = [] 
+const CountryMarkers: React.FC<CountryMarkersProps> = ({
+  markers,
+  activeCountries = [],
+  transferCounts = {}
 }) => {
   return (
     <group>
       {markers.map((marker) => {
         const isActive = activeCountries.includes(marker.code);
-        
+        const transferCount = transferCounts[marker.code] ?? 0;
+        const badgeWidth = Math.max(0.3, 0.24 + transferCount.toString().length * 0.08);
+
         return (
           <group key={marker.code}>
             {/* Country dot */}
@@ -56,6 +60,30 @@ const CountryMarkers: React.FC<CountryMarkersProps> = ({
                   opacity={0.3}
                 />
               </mesh>
+            )}
+
+            {/* Transfer count badge */}
+            {transferCount > 0 && (
+              <group position={[marker.position[0], marker.position[1] + 0.4, marker.position[2]]}>
+                <mesh>
+                  <planeGeometry args={[badgeWidth, 0.22]} />
+                  <meshBasicMaterial
+                    color={isActive ? '#2563eb' : '#0f172a'}
+                    transparent
+                    opacity={isActive ? 0.95 : 0.7}
+                  />
+                </mesh>
+                <Text
+                  position={[0, 0, 0.01]}
+                  fontSize={0.12}
+                  color="#ffffff"
+                  anchorX="center"
+                  anchorY="middle"
+                  fontWeight="bold"
+                >
+                  {transferCount}
+                </Text>
+              </group>
             )}
           </group>
         );

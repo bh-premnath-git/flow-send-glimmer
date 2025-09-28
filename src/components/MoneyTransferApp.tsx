@@ -1,23 +1,103 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import TransferForm, { TransferData } from './TransferForm';
 import TransferAnimation from './TransferAnimation';
+import type { TransferHistoryEntry, TransferStatus } from '../types/transfers';
 
 const MoneyTransferApp: React.FC = () => {
-  const [currentTransfer, setCurrentTransfer] = useState<TransferData | null>(null);
+  const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>([]);
   const [isTransferring, setIsTransferring] = useState(false);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const registerTimeout = (timeout: ReturnType<typeof setTimeout>) => {
+    timeoutsRef.current.push(timeout);
+  };
+
+  const clearScheduledTimeouts = () => {
+    timeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    timeoutsRef.current = [];
+  };
+
+  useEffect(() => () => clearScheduledTimeouts(), []);
+
+  const currentTransfer = useMemo(() => {
+    return transferHistory.find((transfer) => transfer.status === 'active' || transfer.status === 'pending') ?? null;
+  }, [transferHistory]);
+
+  const updateTransferStatus = (id: string, status: TransferStatus) => {
+    setTransferHistory((prev) =>
+      prev.map((transfer) =>
+        transfer.id === id
+          ? {
+              ...transfer,
+              status,
+              updatedAt: Date.now(),
+              completedAt: status === 'completed' ? Date.now() : transfer.completedAt,
+            }
+          : transfer,
+      ),
+    );
+  };
 
   const handleTransferSubmit = async (transferData: TransferData) => {
+    const now = Date.now();
+    const transferId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+
     setIsTransferring(true);
-    setCurrentTransfer(transferData);
-    
-    // Simulate transfer processing time
-    setTimeout(() => {
-      setIsTransferring(false);
-    }, 4000);
+    clearScheduledTimeouts();
+
+    setTransferHistory((prev) => {
+      const timestamp = Date.now();
+      const completedPrev = prev.map((transfer) =>
+        transfer.status === 'active' || transfer.status === 'pending'
+          ? { ...transfer, status: 'completed', updatedAt: timestamp, completedAt: timestamp }
+          : transfer,
+      );
+
+      return [
+        ...completedPrev,
+        {
+          id: transferId,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          completedAt: undefined,
+          ...transferData,
+        },
+      ];
+    });
+
+    registerTimeout(
+      setTimeout(() => {
+        setTransferHistory((prev) =>
+          prev.map((transfer) => {
+            if (transfer.id === transferId && transfer.status === 'pending') {
+              return { ...transfer, status: 'active', updatedAt: Date.now() };
+            }
+
+            return transfer;
+          }),
+        );
+      }, 400),
+    );
+
+    registerTimeout(
+      setTimeout(() => {
+        updateTransferStatus(transferId, 'completed');
+        setIsTransferring(false);
+      }, 4000),
+    );
   };
 
   const resetTransfer = () => {
-    setCurrentTransfer(null);
+    clearScheduledTimeouts();
+    const timestamp = Date.now();
+    setTransferHistory((prev) =>
+      prev.map((transfer) =>
+        transfer.status === 'completed'
+          ? transfer
+          : { ...transfer, status: 'completed', updatedAt: timestamp, completedAt: timestamp },
+      ),
+    );
     setIsTransferring(false);
   };
 
@@ -65,14 +145,9 @@ const MoneyTransferApp: React.FC = () => {
         <div className="lg:w-1/2 relative min-h-[400px] lg:min-h-screen">
           <div className="absolute inset-0 bg-gradient-to-bl from-primary/5 via-transparent to-accent/5" />
           
-          {currentTransfer ? (
+          {transferHistory.length > 0 ? (
             <TransferAnimation
-              isActive={isTransferring}
-              fromCountry={currentTransfer.fromCountry}
-              toCountry={currentTransfer.toCountry}
-              amount={currentTransfer.amount}
-              fromCurrency={currentTransfer.fromCurrency}
-              toCurrency={currentTransfer.toCurrency}
+              transferHistory={transferHistory}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
