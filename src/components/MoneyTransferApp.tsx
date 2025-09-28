@@ -109,7 +109,14 @@ const MoneyTransferApp: React.FC = () => {
   });
   const [animationProgress, setAnimationProgress] = useState(0);
   const [isTransferring, setIsTransferring] = useState(false);
-  const [viewState, setViewState] = useState({ longitude: 0, latitude: 20, zoom: 1.5 });
+  const [viewState, setViewState] = useState({
+    longitude: 0,
+    latitude: 0,
+    zoom: 1,
+    bearing: 0,
+    pitch: 0,
+    padding: { top: 0, bottom: 0, left: 0, right: 0 },
+  });
 
   const sortedHistory = useMemo(
     () =>
@@ -236,13 +243,16 @@ const MoneyTransferApp: React.FC = () => {
     const lonDistance = Math.abs(fromLon - toLon);
     const latDistance = Math.abs(fromLat - toLat);
     const maxDistance = Math.max(lonDistance, latDistance);
-    const zoom = Math.max(1.5, 4 - maxDistance / 40);
+    const zoom = Math.max(1, 4 - maxDistance / 40);
 
     setViewState((prev) => ({
       ...prev,
       longitude: centerLon,
       latitude: centerLat,
       zoom,
+      bearing: prev.bearing,
+      pitch: prev.pitch,
+      padding: prev.padding,
     }));
   }, [animatingCoordinates]);
 
@@ -262,7 +272,7 @@ const MoneyTransferApp: React.FC = () => {
           entry.status === 'active'
             ? {
                 ...entry,
-                status: 'completed',
+                status: 'completed' as TransferHistoryEntry['status'],
                 updatedAt: nowTimestamp,
                 completedAt: nowTimestamp,
               }
@@ -388,8 +398,23 @@ const MoneyTransferApp: React.FC = () => {
             </div>
             <div className="relative h-[28rem] w-full">
               <Map
-                viewState={viewState}
-                onMove={(event) => setViewState(event.viewState)}
+                initialViewState={viewState}
+                onMove={(event) => {
+                  const vs = event.viewState;
+                  setViewState({
+                    longitude: vs.longitude,
+                    latitude: vs.latitude,
+                    zoom: vs.zoom,
+                    bearing: vs.bearing,
+                    pitch: vs.pitch,
+                    padding: {
+                      top: vs.padding?.top ?? 0,
+                      bottom: vs.padding?.bottom ?? 0,
+                      left: vs.padding?.left ?? 0,
+                      right: vs.padding?.right ?? 0,
+                    },
+                  });
+                }}
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
               >
@@ -403,7 +428,7 @@ const MoneyTransferApp: React.FC = () => {
                         'line-width': 6,
                         'line-opacity': 0.9,
                         'line-blur': 0.8,
-                        'line-gradient': mapLineGradient,
+                        'line-gradient': mapLineGradient as unknown as import('maplibre-gl').ExpressionSpecification,
                       }}
                     />
                   </Source>
