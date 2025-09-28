@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { Map } from 'react-map-gl/maplibre';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { TransferHistoryEntry } from '../types/transfers';
+import TransferForm, { type TransferData } from './TransferForm';
+import { getCountryCoordinates, getCountryName } from '../data/countryCoordinates';
 
 const statusPriority: Record<TransferHistoryEntry['status'], number> = {
   active: 0,
@@ -100,7 +102,14 @@ const formatRelativeTime = (timestamp: number) => {
 };
 
 const MoneyTransferApp: React.FC = () => {
-  const [transferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
+  const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
+  const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(() => {
+    const firstActive = initialTransfers.find((transfer) => transfer.status === 'active');
+    return firstActive?.id ?? initialTransfers[0]?.id ?? null;
+  });
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [viewState, setViewState] = useState({ longitude: 0, latitude: 20, zoom: 1.5 });
 
   const sortedHistory = useMemo(
     () =>
@@ -110,9 +119,13 @@ const MoneyTransferApp: React.FC = () => {
     [transferHistory],
   );
 
-  const activeTransfer = useMemo(
-    () => sortedHistory.find((transfer) => transfer.status === 'active') ?? null,
-    [sortedHistory],
+  const activeTransfer = useMemo(() => transferHistory.find((transfer) => transfer.status === 'active') ?? null, [
+    transferHistory,
+  ]);
+
+  const animatingTransfer = useMemo(
+    () => transferHistory.find((transfer) => transfer.id === animatingTransferId) ?? activeTransfer ?? null,
+    [activeTransfer, animatingTransferId, transferHistory],
   );
 
   const totalVolume = useMemo(
@@ -136,6 +149,176 @@ const MoneyTransferApp: React.FC = () => {
       }, 0),
     [transferHistory],
   );
+
+  const animatingCoordinates = useMemo(() => {
+    if (!animatingTransfer) {
+      return null;
+    }
+
+    const from = getCountryCoordinates(animatingTransfer.fromCountry);
+    const to = getCountryCoordinates(animatingTransfer.toCountry);
+
+    if (!from || !to) {
+      return null;
+    }
+
+    return { from, to };
+  }, [animatingTransfer]);
+
+  const arcGeoJson = useMemo(() => {
+    if (!animatingTransfer || !animatingCoordinates) {
+      return null;
+    }
+
+    return {
+      type: 'FeatureCollection' as const,
+      features: [
+        {
+          type: 'Feature' as const,
+          properties: {
+            id: animatingTransfer.id,
+            status: animatingTransfer.status,
+          },
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [animatingCoordinates.from, animatingCoordinates.to],
+          },
+        },
+      ],
+    };
+  }, [animatingCoordinates, animatingTransfer]);
+
+  useEffect(() => {
+    if (!animatingTransferId) {
+      return;
+    }
+
+    let frameId: number;
+    let lastTimestamp: number | null = null;
+
+    const animate = (timestamp: number) => {
+      if (lastTimestamp === null) {
+        lastTimestamp = timestamp;
+      }
+
+      const delta = timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+
+      setAnimationProgress((prev) => {
+        const progress = prev + delta * 0.0004;
+        if (progress > 1) {
+          return progress - 1;
+        }
+        return progress;
+      });
+
+      frameId = requestAnimationFrame(animate);
+    };
+
+    setAnimationProgress(0);
+    frameId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [animatingTransferId]);
+
+  useEffect(() => {
+    if (!animatingCoordinates) {
+      return;
+    }
+
+    const [fromLon, fromLat] = animatingCoordinates.from;
+    const [toLon, toLat] = animatingCoordinates.to;
+
+    const centerLon = (fromLon + toLon) / 2;
+    const centerLat = (fromLat + toLat) / 2;
+    const lonDistance = Math.abs(fromLon - toLon);
+    const latDistance = Math.abs(fromLat - toLat);
+    const maxDistance = Math.max(lonDistance, latDistance);
+    const zoom = Math.max(1.5, 4 - maxDistance / 40);
+
+    setViewState((prev) => ({
+      ...prev,
+      longitude: centerLon,
+      latitude: centerLat,
+      zoom,
+    }));
+  }, [animatingCoordinates]);
+
+  const handleTransferSubmit = useCallback(
+    (transfer: TransferData) => {
+      if (isTransferring) {
+        return;
+      }
+
+      setIsTransferring(true);
+
+      const nowTimestamp = Date.now();
+      const newTransferId = `trf-${Math.random().toString(36).slice(2, 8)}`;
+
+      setTransferHistory((prev) => {
+        const updatedHistory = prev.map((entry) =>
+          entry.status === 'active'
+            ? {
+                ...entry,
+                status: 'completed',
+                updatedAt: nowTimestamp,
+                completedAt: nowTimestamp,
+              }
+            : entry,
+        );
+
+        const newEntry: TransferHistoryEntry = {
+          id: newTransferId,
+          fromCountry: transfer.fromCountry,
+          toCountry: transfer.toCountry,
+          amount: transfer.amount,
+          fromCurrency: transfer.fromCurrency,
+          toCurrency: transfer.toCurrency,
+          status: 'active',
+          createdAt: nowTimestamp,
+          updatedAt: nowTimestamp,
+        };
+
+        return [newEntry, ...updatedHistory];
+      });
+
+      setAnimatingTransferId(newTransferId);
+
+      setTimeout(() => {
+        setIsTransferring(false);
+      }, 450);
+    },
+    [isTransferring],
+  );
+
+  const handleHistoryClick = useCallback((transferId: string) => {
+    setAnimatingTransferId(transferId);
+  }, []);
+
+  const mapLineGradient = useMemo(
+    () => [
+      'interpolate',
+      ['linear'],
+      ['line-progress'],
+      Math.max(animationProgress - 0.2, 0),
+      'rgba(56,189,248,0)',
+      animationProgress,
+      'rgba(16,185,129,0.9)',
+      Math.min(animationProgress + 0.2, 1),
+      'rgba(56,189,248,0)',
+    ],
+    [animationProgress],
+  );
+
+  const activeCountryLabel = useMemo(() => {
+    if (!animatingTransfer) {
+      return 'No active corridor';
+    }
+
+    return `${getCountryName(animatingTransfer.fromCountry)} → ${getCountryName(animatingTransfer.toCountry)}`;
+  }, [animatingTransfer]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 py-10 text-slate-100">
@@ -196,6 +379,7 @@ const MoneyTransferApp: React.FC = () => {
               <div>
                 <p className="text-sm uppercase tracking-wide text-slate-300">Global corridors</p>
                 <h2 className="text-2xl font-semibold">Live map view</h2>
+                <p className="text-sm text-slate-300">{activeCountryLabel}</p>
               </div>
               <div className="text-right text-sm text-slate-300">
                 <p>Base map: Carto Positron</p>
@@ -204,48 +388,97 @@ const MoneyTransferApp: React.FC = () => {
             </div>
             <div className="relative h-[28rem] w-full">
               <Map
-                initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
+                viewState={viewState}
+                onMove={(event) => setViewState(event.viewState)}
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
-              />
+              >
+                {arcGeoJson && (
+                  <Source id="transfer-arc" type="geojson" data={arcGeoJson} lineMetrics>
+                    <Layer
+                      id="transfer-arc-layer"
+                      type="line"
+                      layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                      paint={{
+                        'line-width': 6,
+                        'line-opacity': 0.9,
+                        'line-blur': 0.8,
+                        'line-gradient': mapLineGradient,
+                      }}
+                    />
+                  </Source>
+                )}
+
+                {animatingCoordinates && (
+                  <>
+                    <Marker longitude={animatingCoordinates.from[0]} latitude={animatingCoordinates.from[1]}>
+                      <div className="relative flex h-6 w-6 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-300" />
+                      </div>
+                    </Marker>
+                    <Marker longitude={animatingCoordinates.to[0]} latitude={animatingCoordinates.to[1]}>
+                      <div className="relative flex h-6 w-6 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-300" />
+                      </div>
+                    </Marker>
+                  </>
+                )}
+              </Map>
             </div>
           </section>
 
-          <section className="flex flex-col rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur">
-            <div className="border-b border-white/10 px-6 py-5">
-              <p className="text-sm uppercase tracking-wide text-slate-300">Recent activity</p>
-              <h2 className="text-xl font-semibold">Transfer history</h2>
-            </div>
-            <div className="flex-1 space-y-2 overflow-y-auto px-6 py-4">
-              {sortedHistory.map((transfer) => (
-                <article
-                  key={transfer.id}
-                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-300">{transfer.id}</p>
-                      <h3 className="text-lg font-semibold">
-                        {transfer.fromCountry} → {transfer.toCountry}
-                      </h3>
+          <div className="flex flex-col gap-6">
+            <section className="rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur">
+              <div className="border-b border-white/10 px-6 py-5">
+                <p className="text-sm uppercase tracking-wide text-slate-300">Initiate transfer</p>
+                <h2 className="text-xl font-semibold">Send money</h2>
+              </div>
+              <div className="px-6 py-5">
+                <TransferForm onTransferSubmit={handleTransferSubmit} isTransferring={isTransferring} />
+              </div>
+            </section>
+
+            <section className="flex flex-1 flex-col rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur">
+              <div className="border-b border-white/10 px-6 py-5">
+                <p className="text-sm uppercase tracking-wide text-slate-300">Recent activity</p>
+                <h2 className="text-xl font-semibold">Transfer history</h2>
+              </div>
+              <div className="flex-1 space-y-2 overflow-y-auto px-6 py-4">
+                {sortedHistory.map((transfer) => (
+                  <article
+                    key={transfer.id}
+                    onClick={() => handleHistoryClick(transfer.id)}
+                    className={`cursor-pointer rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent p-4 transition-transform duration-200 hover:-translate-y-1 hover:border-sky-400/50 ${
+                      transfer.id === animatingTransferId ? 'ring-2 ring-sky-400/60' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-300">{transfer.id}</p>
+                        <h3 className="text-lg font-semibold">
+                          {transfer.fromCountry} → {transfer.toCountry}
+                        </h3>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColors[transfer.status]}`}>
+                        {transfer.status.toUpperCase()}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColors[transfer.status]}`}>
-                      {transfer.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-2xl font-semibold">
-                    {formatCurrency(transfer.amount, transfer.fromCurrency)}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {transfer.fromCurrency} → {transfer.toCurrency}
-                  </p>
-                  <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">
-                    Updated {formatRelativeTime(transfer.updatedAt)}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </section>
+                    <p className="mt-3 text-2xl font-semibold">
+                      {formatCurrency(transfer.amount, transfer.fromCurrency)}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {transfer.fromCurrency} → {transfer.toCurrency}
+                    </p>
+                    <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">
+                      Updated {formatRelativeTime(transfer.updatedAt)}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
