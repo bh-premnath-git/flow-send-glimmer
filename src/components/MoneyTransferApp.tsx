@@ -252,10 +252,58 @@ const MoneyTransferApp: React.FC = () => {
       return;
     }
 
-    let frameId: number;
+    setAnimationProgress(GRADIENT_EPSILON);
+
+    let frameId = 0;
     let lastTimestamp: number | null = null;
+    let done = false;
+
+    const finishTransfer = () => {
+      if (done) {
+        return;
+      }
+      done = true;
+      cancelAnimationFrame(frameId);
+
+      const completionTime = Date.now();
+      let nextAnimatingId: string | null = null;
+      let didComplete = false;
+
+      setTransferHistory((prev) => {
+        const updated = prev.map((entry) => {
+          if (entry.id === animatingTransferId && entry.status === 'active') {
+            didComplete = true;
+            return {
+              ...entry,
+              status: 'completed',
+              updatedAt: completionTime,
+              completedAt: completionTime,
+            };
+          }
+          return entry;
+        });
+
+        if (didComplete) {
+          nextAnimatingId = updated.find((entry) => entry.status === 'active')?.id ?? null;
+        }
+
+        return updated;
+      });
+
+      setAnimationProgress(1);
+
+      if (didComplete) {
+        setAnimatingTransferId(nextAnimatingId);
+      } else {
+        setAnimatingTransferId((current) => (current === animatingTransferId ? null : current));
+      }
+    };
 
     const animate = (timestamp: number) => {
+      if (done) {
+        return;
+      }
+
       if (lastTimestamp === null) {
         lastTimestamp = timestamp;
       }
@@ -263,24 +311,30 @@ const MoneyTransferApp: React.FC = () => {
       const delta = timestamp - lastTimestamp;
       lastTimestamp = timestamp;
 
+      let reachedEnd = false;
       setAnimationProgress((prev) => {
-        const progress = prev + delta * 0.0004;
-        if (progress > 1) {
-          return progress - 1;
+        const next = Math.min(1, prev + delta * 0.0004);
+        if (next >= 1) {
+          reachedEnd = true;
         }
-        return progress;
+        return next;
       });
+
+      if (reachedEnd) {
+        finishTransfer();
+        return;
+      }
 
       frameId = requestAnimationFrame(animate);
     };
 
-    setAnimationProgress(GRADIENT_EPSILON);
     frameId = requestAnimationFrame(animate);
 
     return () => {
+      done = true;
       cancelAnimationFrame(frameId);
     };
-  }, [animatingTransferId]);
+  }, [animatingTransferId, setAnimatingTransferId, setTransferHistory]);
 
   useEffect(() => {
     if (!animatingCoordinates) {
