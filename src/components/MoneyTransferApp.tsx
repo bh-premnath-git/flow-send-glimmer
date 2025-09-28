@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre';
-import type { MapViewState } from 'react-map-gl/maplibre';
+import type { ViewState } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { TransferHistoryEntry } from '../types/transfers';
@@ -101,6 +101,28 @@ const formatRelativeTime = (timestamp: number) => {
   const daysAgo = Math.round(hoursAgo / 24);
   return `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
 };
+
+type MapViewState = ViewState & { width: number; height: number };
+
+const normalizeViewState = (prev: MapViewState, next: ViewState): MapViewState => ({
+  ...prev,
+  ...next,
+  width: typeof next.width === 'number' ? next.width : prev.width,
+  height: typeof next.height === 'number' ? next.height : prev.height,
+});
+
+const areViewStatesEqual = (a: MapViewState, b: MapViewState) =>
+  a.longitude === b.longitude &&
+  a.latitude === b.latitude &&
+  a.zoom === b.zoom &&
+  a.bearing === b.bearing &&
+  a.pitch === b.pitch &&
+  a.width === b.width &&
+  a.height === b.height &&
+  a.padding?.top === b.padding?.top &&
+  a.padding?.bottom === b.padding?.bottom &&
+  a.padding?.left === b.padding?.left &&
+  a.padding?.right === b.padding?.right;
 
 const defaultViewState: MapViewState = {
   longitude: 0,
@@ -251,12 +273,16 @@ const MoneyTransferApp: React.FC = () => {
     const maxDistance = Math.max(lonDistance, latDistance);
     const zoom = Math.max(1, 4 - maxDistance / 40);
 
-    setViewState((prev) => ({
-      ...prev,
-      longitude: centerLon,
-      latitude: centerLat,
-      zoom,
-    }));
+    setViewState((prev) => {
+      const next: MapViewState = {
+        ...prev,
+        longitude: centerLon,
+        latitude: centerLat,
+        zoom,
+      };
+
+      return areViewStatesEqual(prev, next) ? prev : next;
+    });
   }, [animatingCoordinates]);
 
   const handleTransferSubmit = useCallback(
@@ -404,10 +430,10 @@ const MoneyTransferApp: React.FC = () => {
                 initialViewState={initialViewStateRef.current}
                 viewState={viewState}
                 onMove={(event) => {
-                  setViewState((prev) => ({
-                    ...prev,
-                    ...event.viewState,
-                  }));
+                  setViewState((prev) => {
+                    const next = normalizeViewState(prev, event.viewState);
+                    return areViewStatesEqual(prev, next) ? prev : next;
+                  });
                 }}
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
