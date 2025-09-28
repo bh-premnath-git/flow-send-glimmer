@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -101,6 +101,15 @@ const formatRelativeTime = (timestamp: number) => {
   return `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
 };
 
+const defaultViewState = {
+  longitude: 0,
+  latitude: 0,
+  zoom: 1,
+  bearing: 0,
+  pitch: 0,
+  padding: { top: 0, bottom: 0, left: 0, right: 0 },
+};
+
 const MoneyTransferApp: React.FC = () => {
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
   const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(() => {
@@ -109,14 +118,8 @@ const MoneyTransferApp: React.FC = () => {
   });
   const [animationProgress, setAnimationProgress] = useState(0);
   const [isTransferring, setIsTransferring] = useState(false);
-  const [viewState, setViewState] = useState({
-    longitude: 0,
-    latitude: 0,
-    zoom: 1,
-    bearing: 0,
-    pitch: 0,
-    padding: { top: 0, bottom: 0, left: 0, right: 0 },
-  });
+  const [viewState, setViewState] = useState(defaultViewState);
+  const initialViewStateRef = useRef(defaultViewState);
 
   const sortedHistory = useMemo(
     () =>
@@ -398,7 +401,8 @@ const MoneyTransferApp: React.FC = () => {
             </div>
             <div className="relative h-[28rem] w-full">
               <Map
-                initialViewState={viewState}
+                initialViewState={initialViewStateRef.current}
+                viewState={viewState}
                 onMove={(event) => {
                   const vs = event.viewState;
                   setViewState({
