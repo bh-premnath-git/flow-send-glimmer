@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre';
-import type { MapViewState } from 'react-map-gl/maplibre';
+import type { ViewState } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { TransferHistoryEntry } from '../types/transfers';
@@ -101,6 +101,8 @@ const formatRelativeTime = (timestamp: number) => {
   const daysAgo = Math.round(hoursAgo / 24);
   return `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
 };
+
+type MapViewState = ViewState & { width: number; height: number };
 
 const defaultViewState: MapViewState = {
   longitude: 0,
