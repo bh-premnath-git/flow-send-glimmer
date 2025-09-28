@@ -205,7 +205,7 @@ const MoneyTransferApp: React.FC = () => {
             <div className="relative h-[28rem] w-full">
               <Map
                 initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
-                mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+                mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
               />
             </div>
