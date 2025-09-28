@@ -1,8 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import Globe3D from './Globe3D';
 import TransferArc from './TransferArc';
+
+// Error boundary component for 3D content
+class ThreeErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('Three.js Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-background to-card">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+      <p className="text-muted-foreground">Loading 3D Globe...</p>
+    </div>
+  </div>
+);
+
+// Error fallback component  
+const ErrorFallback = () => (
+  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-background to-card">
+    <div className="text-center space-y-4">
+      <div className="w-24 h-24 mx-auto bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
+        <div className="text-3xl">🌍</div>
+      </div>
+      <h3 className="text-xl font-semibold text-foreground">Global Transfer Map</h3>
+      <p className="text-muted-foreground max-w-md">
+        Your transfer is being processed. The 3D visualization is temporarily unavailable.
+      </p>
+    </div>
+  </div>
+);
 
 interface TransferPoint {
   id: string;
@@ -64,40 +116,46 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({
   const fromPoint = transferPoints[fromCountry];
   const toPoint = transferPoints[toCountry];
 
-  if (!fromPoint || !toPoint) return null;
+  if (!fromPoint || !toPoint) {
+    return <ErrorFallback />;
+  }
 
   return (
     <div className="relative w-full h-full bg-gradient-to-br from-background to-card">
-      <Canvas className="w-full h-full">
-        <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={50} />
-        
-        {/* Globe */}
-        <Globe3D autoRotate={!isActive} rotationSpeed={0.003} />
-        
-        {/* Transfer Arc */}
-        {isActive && (
-          <TransferArc
-            startPoint={fromPoint.position}
-            endPoint={toPoint.position}
-            isActive={animationStep >= 1}
-            color="#3b82f6"
-            currency={toCurrency}
-            amount={Math.round(amount * 1.2)}
-          />
-        )}
-        
-        {/* Camera controls */}
-        <OrbitControls
-          enablePan={false}
-          enableZoom={true}
-          minDistance={5}
-          maxDistance={15}
-          minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI - Math.PI / 6}
-          autoRotate={!isActive}
-          autoRotateSpeed={0.5}
-        />
-      </Canvas>
+      <ThreeErrorBoundary fallback={<ErrorFallback />}>
+        <Suspense fallback={<LoadingFallback />}>
+          <Canvas className="w-full h-full">
+            <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={50} />
+            
+            {/* Globe */}
+            <Globe3D autoRotate={!isActive} rotationSpeed={0.003} />
+            
+            {/* Transfer Arc */}
+            {isActive && (
+              <TransferArc
+                startPoint={fromPoint.position}
+                endPoint={toPoint.position}
+                isActive={animationStep >= 1}
+                color="#3b82f6"
+                currency={toCurrency}
+                amount={Math.round(amount * 1.2)}
+              />
+            )}
+            
+            {/* Camera controls */}
+            <OrbitControls
+              enablePan={false}
+              enableZoom={true}
+              minDistance={5}
+              maxDistance={15}
+              minPolarAngle={Math.PI / 6}
+              maxPolarAngle={Math.PI - Math.PI / 6}
+              autoRotate={!isActive}
+              autoRotateSpeed={0.5}
+            />
+          </Canvas>
+        </Suspense>
+      </ThreeErrorBoundary>
       
       {/* Transfer status overlay */}
       {isActive && (

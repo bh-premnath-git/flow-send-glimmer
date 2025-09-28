@@ -1,8 +1,7 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Line, Sphere, Text } from '@react-three/drei';
-import { Vector3, CatmullRomCurve3, BufferGeometry, Color } from 'three';
-import * as THREE from 'three';
+import { Line, Text } from '@react-three/drei';
+import { Vector3, CatmullRomCurve3 } from 'three';
 
 interface TransferArcProps {
   startPoint: [number, number, number];
@@ -23,90 +22,67 @@ const TransferArc: React.FC<TransferArcProps> = ({
   currency = 'USD',
   amount = 1000
 }) => {
-  const arcRef = useRef<any>(null);
   const dotRef = useRef<any>(null);
-  const progressRef = useRef(0);
+  const [animationProgress, setAnimationProgress] = useState(0);
 
-  // Create arc path
+  // Create arc path points
   const arcPoints = useMemo(() => {
     const start = new Vector3(...startPoint);
     const end = new Vector3(...endPoint);
     
     // Calculate the midpoint and raise it for arc effect
     const mid = start.clone().add(end).multiplyScalar(0.5);
-    const height = start.distanceTo(end) * 0.3; // Arc height
-    mid.normalize().multiplyScalar(2 + height); // Raise the arc
+    const height = start.distanceTo(end) * 0.3;
+    mid.normalize().multiplyScalar(2 + height);
     
     // Create smooth curve
     const curve = new CatmullRomCurve3([start, mid, end]);
     return curve.getPoints(50);
   }, [startPoint, endPoint]);
 
-  // Animate progress
+  // Animate progress smoothly
   useFrame((state) => {
-    if (isActive && progressRef.current < 1) {
-      progressRef.current = Math.min(progressRef.current + 0.02, 1);
-    } else if (!isActive) {
-      progressRef.current = Math.max(progressRef.current - 0.05, 0);
+    if (isActive && animationProgress < 1) {
+      setAnimationProgress(prev => Math.min(prev + 0.02, 1));
+    } else if (!isActive && animationProgress > 0) {
+      setAnimationProgress(prev => Math.max(prev - 0.05, 0));
     }
 
-    // Update arc visibility based on progress
-    if (arcRef.current) {
-      const geometry = arcRef.current.geometry;
-      if (geometry && geometry.attributes.position) {
-        const positions = geometry.attributes.position.array;
-        const visiblePoints = Math.floor(arcPoints.length * progressRef.current);
-        
-        // Create new geometry with only visible points
-        const visiblePositions = new Float32Array(visiblePoints * 3);
-        for (let i = 0; i < visiblePoints; i++) {
-          const point = arcPoints[i];
-          visiblePositions[i * 3] = point.x;
-          visiblePositions[i * 3 + 1] = point.y;
-          visiblePositions[i * 3 + 2] = point.z;
-        }
-        
-        geometry.setAttribute('position', new THREE.BufferAttribute(visiblePositions, 3));
-        geometry.attributes.position.needsUpdate = true;
-      }
-    }
-
-    // Update dot position
-    if (dotRef.current && progressRef.current > 0) {
-      const currentIndex = Math.floor((arcPoints.length - 1) * progressRef.current);
+    // Update dot position along the arc
+    if (dotRef.current && animationProgress > 0) {
+      const currentIndex = Math.floor((arcPoints.length - 1) * animationProgress);
       const point = arcPoints[currentIndex];
       if (point) {
         dotRef.current.position.copy(point);
         // Add floating animation
-        dotRef.current.position.y += Math.sin(state.clock.elapsedTime * 3) * 0.1;
+        dotRef.current.position.y += Math.sin(state.clock.elapsedTime * 3) * 0.05;
       }
     }
   });
 
+  // Create visible arc points based on progress
+  const visiblePoints = useMemo(() => {
+    const visibleCount = Math.floor(arcPoints.length * animationProgress);
+    return arcPoints.slice(0, Math.max(visibleCount, 1));
+  }, [arcPoints, animationProgress]);
+
   return (
     <group>
-      {/* Arc line */}
-      <line ref={arcRef}>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={arcPoints.length}
-            array={new Float32Array(arcPoints.flatMap(p => [p.x, p.y, p.z]))}
-            itemSize={3}
-          />
-        </bufferGeometry>
-        <lineBasicMaterial 
-          color={color} 
-          linewidth={3}
+      {/* Arc line - only show if we have progress */}
+      {animationProgress > 0 && visiblePoints.length > 1 && (
+        <Line
+          points={visiblePoints}
+          color={color}
+          lineWidth={3}
           transparent
           opacity={isActive ? 0.8 : 0.3}
         />
-      </line>
+      )}
 
       {/* Moving dot */}
-      {progressRef.current > 0 && (
+      {animationProgress > 0 && (
         <mesh ref={dotRef}>
-          <sphereGeometry args={[0.05, 16, 16]} />
+          <sphereGeometry args={[0.05, 8, 8]} />
           <meshBasicMaterial 
             color={color}
             transparent
@@ -117,7 +93,7 @@ const TransferArc: React.FC<TransferArcProps> = ({
 
       {/* Source point */}
       <mesh position={startPoint}>
-        <sphereGeometry args={[0.08, 16, 16]} />
+        <sphereGeometry args={[0.08, 8, 8]} />
         <meshBasicMaterial 
           color={isActive ? color : '#666666'}
           transparent
@@ -127,27 +103,38 @@ const TransferArc: React.FC<TransferArcProps> = ({
 
       {/* Destination point */}
       <mesh position={endPoint}>
-        <sphereGeometry args={[0.08, 16, 16]} />
+        <sphereGeometry args={[0.08, 8, 8]} />
         <meshBasicMaterial 
-          color={progressRef.current > 0.8 ? '#10b981' : '#666666'}
+          color={animationProgress > 0.8 ? '#10b981' : '#666666'}
           transparent
-          opacity={progressRef.current > 0.8 ? 1 : 0.5}
+          opacity={animationProgress > 0.8 ? 1 : 0.5}
         />
       </mesh>
 
       {/* Currency label at destination */}
-      {progressRef.current > 0.8 && (
-        <Text
-          position={[endPoint[0], endPoint[1] + 0.3, endPoint[2]]}
-          fontSize={0.2}
-          color="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-          fontWeight="bold"
-        >
-          {currency} {amount.toLocaleString()}
-        </Text>
+      {animationProgress > 0.8 && (
+        <Html position={[endPoint[0], endPoint[1] + 0.3, endPoint[2]]}>
+          <div className="bg-primary text-white px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
+            {currency} {amount.toLocaleString()}
+          </div>
+        </Html>
       )}
+    </group>
+  );
+};
+
+// Simple HTML component for labels
+const Html: React.FC<{ position: [number, number, number]; children: React.ReactNode }> = ({ 
+  position, 
+  children 
+}) => {
+  return (
+    <group position={position}>
+      <mesh>
+        <planeGeometry args={[2, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {/* For now, let's skip the HTML labels to avoid complexity */}
     </group>
   );
 };
