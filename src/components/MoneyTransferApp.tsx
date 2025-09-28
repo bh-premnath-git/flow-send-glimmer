@@ -145,10 +145,7 @@ const interpolateLngLat = (from: [number, number], to: [number, number], t: numb
 
 const MoneyTransferApp: React.FC = () => {
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
-  const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(() => {
-    const firstActive = initialTransfers.find((transfer) => transfer.status === 'active');
-    return firstActive?.id ?? initialTransfers[0]?.id ?? null;
-  });
+  const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(null);
   const [animationProgress, setAnimationProgress] = useState(0);
   const [isTransferring, setIsTransferring] = useState(false);
   const [viewState, setViewState] = useState<MapViewState>(defaultViewState);
@@ -277,12 +274,12 @@ const MoneyTransferApp: React.FC = () => {
       let didComplete = false;
 
       setTransferHistory((prev) => {
-        const updated = prev.map((entry) => {
+        const updated = prev.map<TransferHistoryEntry>((entry) => {
           if (entry.id === animatingTransferId && entry.status === 'active') {
             didComplete = true;
             return {
               ...entry,
-              status: 'completed',
+              status: 'completed' as const,
               updatedAt: completionTime,
               completedAt: completionTime,
             };
@@ -381,11 +378,11 @@ const MoneyTransferApp: React.FC = () => {
       const newTransferId = `trf-${Math.random().toString(36).slice(2, 8)}`;
 
       setTransferHistory((prev) => {
-        const updatedHistory = prev.map((entry) =>
+        const updatedHistory = prev.map<TransferHistoryEntry>((entry) =>
           entry.status === 'active'
             ? {
                 ...entry,
-                status: 'completed' as TransferHistoryEntry['status'],
+                status: 'completed' as const,
                 updatedAt: nowTimestamp,
                 completedAt: nowTimestamp,
               }
@@ -399,7 +396,7 @@ const MoneyTransferApp: React.FC = () => {
           amount: transfer.amount,
           fromCurrency: transfer.fromCurrency,
           toCurrency: transfer.toCurrency,
-          status: 'active',
+          status: 'active' as const,
           createdAt: nowTimestamp,
           updatedAt: nowTimestamp,
         };
@@ -407,6 +404,8 @@ const MoneyTransferApp: React.FC = () => {
         return [newEntry, ...updatedHistory];
       });
 
+      // Start the map animation only for this new transfer
+      setAnimationProgress(GRADIENT_EPSILON);
       setAnimatingTransferId(newTransferId);
 
       setTimeout(() => {
@@ -529,7 +528,7 @@ const MoneyTransferApp: React.FC = () => {
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
               >
-                {arcGeoJson && (
+                {animatingTransferId && arcGeoJson && (
                   <Source id="transfer-arc" type="geojson" data={arcGeoJson} lineMetrics>
                     <Layer
                       id="transfer-arc-layer"
@@ -562,10 +561,13 @@ const MoneyTransferApp: React.FC = () => {
                   </>
                 )}
 
-                {movingBadgeLngLat && animatingTransfer && (
-                  <Marker longitude={movingBadgeLngLat[0]} latitude={movingBadgeLngLat[1]}>
-                    <div className="rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur">
-                      {animatingTransfer.fromCurrency} → {animatingTransfer.toCurrency}
+                {animatingTransferId && movingBadgeLngLat && animatingTransfer && (
+                  <Marker longitude={movingBadgeLngLat[0]} latitude={movingBadgeLngLat[1]} anchor="center">
+                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur">
+                      <span>{formatCurrency(animatingTransfer.amount, animatingTransfer.fromCurrency)}</span>
+                      <span>→</span>
+                      <span>{animatingTransfer.toCurrency}</span>
+                      <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${statusColors['active']}`}>ACTIVE</span>
                     </div>
                   </Marker>
                 )}
