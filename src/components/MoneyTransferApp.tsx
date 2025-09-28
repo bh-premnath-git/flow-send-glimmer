@@ -143,6 +143,9 @@ const interpolateLngLat = (from: [number, number], to: [number, number], t: numb
   lerp(from[1], to[1], t),
 ] as const;
 
+// Mock exchange rate to mirror TransferForm behavior
+const getExchangeRate = (fromCurrency: string, toCurrency: string) => 1.2;
+
 const MoneyTransferApp: React.FC = () => {
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
   const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(null);
@@ -508,7 +511,7 @@ const MoneyTransferApp: React.FC = () => {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <section className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent shadow-2xl">
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent shadow-2xl mx-auto w-11/12 max-w-3xl">
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <p className="text-sm uppercase tracking-wide text-slate-300">Global corridors</p>
@@ -520,7 +523,7 @@ const MoneyTransferApp: React.FC = () => {
                 <p>Zoom to inspect corridor performance</p>
               </div>
             </div>
-            <div className="relative h-[28rem] w-full">
+            <div className="relative w-full h-[clamp(20rem,50vh,60vh)]">
               <Map
                 initialViewState={initialViewStateRef.current as any}
                 viewState={viewState as any}
@@ -563,12 +566,22 @@ const MoneyTransferApp: React.FC = () => {
 
                 {animatingTransferId && movingBadgeLngLat && animatingTransfer && (
                   <Marker longitude={movingBadgeLngLat[0]} latitude={movingBadgeLngLat[1]} anchor="center">
-                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur">
-                      <span>{formatCurrency(animatingTransfer.amount, animatingTransfer.fromCurrency)}</span>
-                      <span>→</span>
-                      <span>{animatingTransfer.toCurrency}</span>
-                      <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${statusColors['active']}`}>ACTIVE</span>
-                    </div>
+                    {(() => {
+                      const rate = getExchangeRate(animatingTransfer.fromCurrency, animatingTransfer.toCurrency);
+                      const recipientGets = animatingTransfer.amount * rate;
+                      return (
+                        <div className="rounded-xl border border-white/20 bg-slate-900/85 px-3 py-2 text-[11px] font-medium text-white shadow-lg backdrop-blur">
+                          <div className="flex items-center gap-2 text-[10px] font-semibold">
+                            <span className={`rounded-full px-2 py-0.5 ${statusColors['active']}`}>ACTIVE</span>
+                          </div>
+                          <div className="mt-1 leading-tight whitespace-nowrap">
+                            <div>You send {animatingTransfer.amount.toFixed(2)} {animatingTransfer.fromCurrency}</div>
+                            <div>Recipient gets {recipientGets.toFixed(2)} {animatingTransfer.toCurrency}</div>
+                            <div className="text-slate-300">Exchange rate: 1 {animatingTransfer.fromCurrency} = {rate} {animatingTransfer.toCurrency}</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </Marker>
                 )}
               </Map>
