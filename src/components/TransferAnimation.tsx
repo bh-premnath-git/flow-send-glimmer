@@ -128,7 +128,11 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({
             <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={50} />
             
             {/* Globe */}
-            <Globe3D autoRotate={!isActive} rotationSpeed={0.003} />
+            <Globe3D 
+              autoRotate={!isActive} 
+              rotationSpeed={0.003}
+              activeCountries={isActive ? [fromCountry, toCountry] : []}
+            />
             
             {/* Transfer Arc */}
             {isActive && (

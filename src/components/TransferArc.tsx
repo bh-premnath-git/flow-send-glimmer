@@ -111,30 +111,31 @@ const TransferArc: React.FC<TransferArcProps> = ({
         />
       </mesh>
 
-      {/* Currency label at destination */}
+      {/* Currency label at destination - using Text from drei */}
       {animationProgress > 0.8 && (
-        <Html position={[endPoint[0], endPoint[1] + 0.3, endPoint[2]]}>
-          <div className="bg-primary text-white px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
-            {currency} {amount.toLocaleString()}
-          </div>
-        </Html>
+        <Text
+          position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}
+          fontSize={0.15}
+          color="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+          fontWeight="bold"
+        >
+          {currency} {amount.toLocaleString()}
+        </Text>
       )}
-    </group>
-  );
-};
 
-// Simple HTML component for labels
-const Html: React.FC<{ position: [number, number, number]; children: React.ReactNode }> = ({ 
-  position, 
-  children 
-}) => {
-  return (
-    <group position={position}>
-      <mesh>
-        <planeGeometry args={[2, 0.5]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
-      {/* For now, let's skip the HTML labels to avoid complexity */}
+      {/* Background for currency text */}
+      {animationProgress > 0.8 && (
+        <mesh position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}>
+          <planeGeometry args={[1, 0.3]} />
+          <meshBasicMaterial 
+            color={color}
+            transparent
+            opacity={0.8}
+          />
+        </mesh>
+      )}
     </group>
   );
 };
