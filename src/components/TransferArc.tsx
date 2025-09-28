@@ -2,12 +2,12 @@ import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Line, Text } from '@react-three/drei';
 import { Vector3, CatmullRomCurve3 } from 'three';
+import type { TransferStatus } from '../types/transfers';
 
 interface TransferArcProps {
   startPoint: [number, number, number];
   endPoint: [number, number, number];
-  isActive: boolean;
-  progress?: number;
+  status: TransferStatus;
   color?: string;
   currency?: string;
   amount?: number;
@@ -16,14 +16,23 @@ interface TransferArcProps {
 const TransferArc: React.FC<TransferArcProps> = ({
   startPoint,
   endPoint,
-  isActive,
-  progress = 0,
+  status,
   color = '#3b82f6',
   currency = 'USD',
   amount = 1000
 }) => {
   const dotRef = useRef<any>(null);
-  const [animationProgress, setAnimationProgress] = useState(0);
+  const [animationProgress, setAnimationProgress] = useState(() => {
+    if (status === 'completed') {
+      return 1;
+    }
+
+    if (status === 'pending') {
+      return 0.15;
+    }
+
+    return 0;
+  });
 
   // Create arc path points
   const arcPoints = useMemo(() => {
@@ -42,14 +51,16 @@ const TransferArc: React.FC<TransferArcProps> = ({
 
   // Animate progress smoothly
   useFrame((state) => {
-    if (isActive && animationProgress < 1) {
-      setAnimationProgress(prev => Math.min(prev + 0.02, 1));
-    } else if (!isActive && animationProgress > 0) {
-      setAnimationProgress(prev => Math.max(prev - 0.05, 0));
+    if (status === 'active' && animationProgress < 1) {
+      setAnimationProgress((prev) => Math.min(prev + 0.02, 1));
+    }
+
+    if (status === 'pending' && animationProgress < 0.35) {
+      setAnimationProgress((prev) => Math.min(prev + 0.01, 0.35));
     }
 
     // Update dot position along the arc
-    if (dotRef.current && animationProgress > 0) {
+    if (dotRef.current && animationProgress > 0 && status === 'active') {
       const currentIndex = Math.floor((arcPoints.length - 1) * animationProgress);
       const point = arcPoints[currentIndex];
       if (point) {
@@ -60,11 +71,25 @@ const TransferArc: React.FC<TransferArcProps> = ({
     }
   });
 
+  useEffect(() => {
+    if (status === 'completed') {
+      setAnimationProgress(1);
+    }
+
+    if (status === 'pending') {
+      setAnimationProgress((prev) => Math.max(prev, 0.15));
+    }
+  }, [status]);
+
   // Create visible arc points based on progress
   const visiblePoints = useMemo(() => {
     const visibleCount = Math.floor(arcPoints.length * animationProgress);
     return arcPoints.slice(0, Math.max(visibleCount, 1));
   }, [arcPoints, animationProgress]);
+
+  const arcOpacity = status === 'completed' ? 0.35 : status === 'pending' ? 0.5 : 0.85;
+  const startOpacity = status === 'completed' ? 0.6 : status === 'pending' ? 0.75 : 1;
+  const destinationReached = status === 'completed' || animationProgress > 0.8;
 
   return (
     <group>
@@ -75,15 +100,15 @@ const TransferArc: React.FC<TransferArcProps> = ({
           color={color}
           lineWidth={3}
           transparent
-          opacity={isActive ? 0.8 : 0.3}
+          opacity={arcOpacity}
         />
       )}
 
       {/* Moving dot */}
-      {animationProgress > 0 && (
+      {animationProgress > 0 && status === 'active' && (
         <mesh ref={dotRef}>
           <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial 
+          <meshBasicMaterial
             color={color}
             transparent
             opacity={0.9}
@@ -94,25 +119,25 @@ const TransferArc: React.FC<TransferArcProps> = ({
       {/* Source point */}
       <mesh position={startPoint}>
         <sphereGeometry args={[0.08, 8, 8]} />
-        <meshBasicMaterial 
-          color={isActive ? color : '#666666'}
+        <meshBasicMaterial
+          color={status === 'completed' ? '#16a34a' : color}
           transparent
-          opacity={isActive ? 1 : 0.5}
+          opacity={startOpacity}
         />
       </mesh>
 
       {/* Destination point */}
       <mesh position={endPoint}>
         <sphereGeometry args={[0.08, 8, 8]} />
-        <meshBasicMaterial 
-          color={animationProgress > 0.8 ? '#10b981' : '#666666'}
+        <meshBasicMaterial
+          color={destinationReached ? '#10b981' : '#666666'}
           transparent
-          opacity={animationProgress > 0.8 ? 1 : 0.5}
+          opacity={destinationReached ? 1 : 0.5}
         />
       </mesh>
 
       {/* Currency label at destination - using Text from drei */}
-      {animationProgress > 0.8 && (
+      {status === 'active' && animationProgress > 0.8 && (
         <Text
           position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}
           fontSize={0.15}
@@ -126,10 +151,10 @@ const TransferArc: React.FC<TransferArcProps> = ({
       )}
 
       {/* Background for currency text */}
-      {animationProgress > 0.8 && (
+      {status === 'active' && animationProgress > 0.8 && (
         <mesh position={[endPoint[0], endPoint[1] + 0.4, endPoint[2]]}>
           <planeGeometry args={[1, 0.3]} />
-          <meshBasicMaterial 
+          <meshBasicMaterial
             color={color}
             transparent
             opacity={0.8}
