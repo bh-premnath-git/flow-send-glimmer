@@ -136,6 +136,13 @@ const defaultViewState: MapViewState = {
 
 const GRADIENT_EPSILON = 0.001;
 
+const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+
+const interpolateLngLat = (from: [number, number], to: [number, number], t: number) => [
+  lerp(from[0], to[0], t),
+  lerp(from[1], to[1], t),
+] as const;
+
 const MoneyTransferApp: React.FC = () => {
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
   const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(() => {
@@ -377,6 +384,15 @@ const MoneyTransferApp: React.FC = () => {
     ];
   }, [animationProgress]);
 
+  const movingBadgeLngLat = useMemo(() => {
+    if (!animatingCoordinates) {
+      return null;
+    }
+
+    const clampedProgress = Math.min(Math.max(animationProgress, 0), 1);
+    return interpolateLngLat(animatingCoordinates.from, animatingCoordinates.to, clampedProgress);
+  }, [animatingCoordinates, animationProgress]);
+
   const activeCountryLabel = useMemo(() => {
     if (!animatingTransfer) {
       return 'No active corridor';
@@ -490,6 +506,14 @@ const MoneyTransferApp: React.FC = () => {
                       </div>
                     </Marker>
                   </>
+                )}
+
+                {movingBadgeLngLat && animatingTransfer && (
+                  <Marker longitude={movingBadgeLngLat[0]} latitude={movingBadgeLngLat[1]}>
+                    <div className="rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur">
+                      {animatingTransfer.fromCurrency} → {animatingTransfer.toCurrency}
+                    </div>
+                  </Marker>
                 )}
               </Map>
             </div>
