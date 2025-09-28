@@ -134,6 +134,8 @@ const defaultViewState: MapViewState = {
   padding: { top: 0, bottom: 0, left: 0, right: 0 },
 };
 
+const GRADIENT_EPSILON = 0.001;
+
 const MoneyTransferApp: React.FC = () => {
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(initialTransfers);
   const [animatingTransferId, setAnimatingTransferId] = useState<string | null>(() => {
@@ -272,7 +274,7 @@ const MoneyTransferApp: React.FC = () => {
       frameId = requestAnimationFrame(animate);
     };
 
-    setAnimationProgress(0);
+    setAnimationProgress(GRADIENT_EPSILON);
     frameId = requestAnimationFrame(animate);
 
     return () => {
@@ -357,20 +359,23 @@ const MoneyTransferApp: React.FC = () => {
     setAnimatingTransferId(transferId);
   }, []);
 
-  const mapLineGradient = useMemo(
-    () => [
+  const mapLineGradient = useMemo(() => {
+    const lowerStop = Math.max(animationProgress - 0.2, 0);
+    const middleStop = Math.max(animationProgress, lowerStop + GRADIENT_EPSILON);
+    const upperStop = Math.min(animationProgress + 0.2, 1);
+
+    return [
       'interpolate',
       ['linear'],
       ['line-progress'],
-      Math.max(animationProgress - 0.2, 0),
+      lowerStop,
       'rgba(56,189,248,0)',
-      animationProgress,
+      middleStop,
       'rgba(16,185,129,0.9)',
-      Math.min(animationProgress + 0.2, 1),
+      upperStop,
       'rgba(56,189,248,0)',
-    ],
-    [animationProgress],
-  );
+    ];
+  }, [animationProgress]);
 
   const activeCountryLabel = useMemo(() => {
     if (!animatingTransfer) {
