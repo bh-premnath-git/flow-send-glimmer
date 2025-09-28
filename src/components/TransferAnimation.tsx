@@ -1,48 +1,7 @@
-import React, { useState, useEffect, Suspense, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import Globe3D from './Globe3D';
-import TransferArc from './TransferArc';
+import React, { useEffect, useMemo, useState } from 'react';
+import TransferMap, { COUNTRY_COORDINATES } from './TransferMap';
 import type { TransferHistoryEntry } from '../types/transfers';
 
-// Error boundary component for 3D content
-class ThreeErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('Three.js Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
-}
-
-// Loading fallback component
-const LoadingFallback = () => (
-  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-background to-card">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-      <p className="text-muted-foreground">Loading 3D Globe...</p>
-    </div>
-  </div>
-);
-
-// Error fallback component
 const ErrorFallback = () => (
   <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-background to-card">
     <div className="text-center space-y-4">
@@ -51,18 +10,11 @@ const ErrorFallback = () => (
       </div>
       <h3 className="text-xl font-semibold text-foreground">Global Transfer Map</h3>
       <p className="text-muted-foreground max-w-md">
-        Your transfer is being processed. The 3D visualization is temporarily unavailable.
+        Your transfer is being processed. The interactive map is temporarily unavailable.
       </p>
     </div>
   </div>
 );
-
-interface TransferPoint {
-  id: string;
-  position: [number, number, number];
-  country: string;
-  currency: string;
-}
 
 interface TransferAnimationProps {
   transferHistory: TransferHistoryEntry[];
@@ -70,22 +22,6 @@ interface TransferAnimationProps {
 
 const TransferAnimation: React.FC<TransferAnimationProps> = ({ transferHistory }) => {
   const [animationStep, setAnimationStep] = useState(0);
-
-  const transferPoints = useMemo<Record<string, TransferPoint>>(
-    () => ({
-      UK: { id: 'uk', position: [0.5, 1.2, 1.5], country: 'United Kingdom', currency: 'GBP' },
-      US: { id: 'us', position: [-1.5, 0.8, 1.2], country: 'United States', currency: 'USD' },
-      IN: { id: 'in', position: [1.2, 0.5, -1.5], country: 'India', currency: 'INR' },
-      CA: { id: 'ca', position: [-1.8, 1.0, 0.8], country: 'Canada', currency: 'CAD' },
-      AU: { id: 'au', position: [1.5, -1.2, 1.0], country: 'Australia', currency: 'AUD' },
-      DE: { id: 'de', position: [0.8, 1.0, 1.7], country: 'Germany', currency: 'EUR' },
-      FR: { id: 'fr', position: [0.3, 1.1, 1.8], country: 'France', currency: 'EUR' },
-      JP: { id: 'jp', position: [1.8, 0.8, -0.5], country: 'Japan', currency: 'JPY' },
-      SG: { id: 'sg', position: [1.4, -0.3, -1.4], country: 'Singapore', currency: 'SGD' },
-      AE: { id: 'ae', position: [1.0, 0.2, -1.8], country: 'UAE', currency: 'AED' },
-    }),
-    [],
-  );
 
   const activeTransfer = useMemo(
     () => transferHistory.find((transfer) => transfer.status === 'active') ?? null,
@@ -115,87 +51,12 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({ transferHistory }
     return undefined;
   }, [currentTransfer?.id]);
 
-  const activeCountries = useMemo(() => {
-    const highlighted = new Set<string>();
-    transferHistory.forEach((transfer) => {
-      if (transfer.status === 'active' || transfer.status === 'pending') {
-        highlighted.add(transfer.fromCountry);
-        highlighted.add(transfer.toCountry);
-      }
-    });
-    return Array.from(highlighted);
-  }, [transferHistory]);
-
-  const transferCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    transferHistory.forEach((transfer) => {
-      counts[transfer.fromCountry] = (counts[transfer.fromCountry] || 0) + 1;
-      counts[transfer.toCountry] = (counts[transfer.toCountry] || 0) + 1;
-    });
-    return counts;
-  }, [transferHistory]);
-
-  if (currentTransfer) {
-    const fromPoint = transferPoints[currentTransfer.fromCountry];
-    const toPoint = transferPoints[currentTransfer.toCountry];
-
-    if (!fromPoint || !toPoint) {
-      return <ErrorFallback />;
-    }
-  }
-
-  const sortedHistory = useMemo(() => {
-    const statusPriority: Record<TransferHistoryEntry['status'], number> = {
-      completed: 0,
-      pending: 1,
-      active: 2,
-    };
-
-    return [...transferHistory].sort((a, b) => statusPriority[a.status] - statusPriority[b.status]);
-  }, [transferHistory]);
-
-  const arcs = useMemo(
-    () =>
-      sortedHistory
-        .map((transfer) => {
-          const fromPoint = transferPoints[transfer.fromCountry];
-          const toPoint = transferPoints[transfer.toCountry];
-
-          if (!fromPoint || !toPoint) {
-            return null;
-          }
-
-          const arcColor =
-            transfer.status === 'completed'
-              ? '#22c55e'
-              : transfer.status === 'pending'
-              ? '#f59e0b'
-              : '#3b82f6';
-
-          return (
-            <TransferArc
-              key={transfer.id}
-              startPoint={fromPoint.position}
-              endPoint={toPoint.position}
-              status={transfer.status}
-              color={arcColor}
-              currency={transfer.toCurrency}
-              amount={Math.round(transfer.amount * 1.2)}
-            />
-          );
-        })
-        .filter((arc): arc is JSX.Element => arc !== null),
-    [sortedHistory, transferPoints],
-  );
-
   const latestTransfer = transferHistory[transferHistory.length - 1] ?? null;
   const displayedTransfer = currentTransfer ?? latestTransfer;
 
-  if (!displayedTransfer && arcs.length === 0) {
+  if (!displayedTransfer && transferHistory.length === 0) {
     return <ErrorFallback />;
   }
-
-  const isAnimating = Boolean(currentTransfer);
 
   const statusAccent: Record<TransferHistoryEntry['status'], string> = {
     pending: 'text-amber-300',
@@ -209,45 +70,28 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({ transferHistory }
     completed: 'Completed',
   };
 
+  const shouldShowFallback =
+    currentTransfer &&
+    (!COUNTRY_COORDINATES[currentTransfer.fromCountry] ||
+      !COUNTRY_COORDINATES[currentTransfer.toCountry]);
+
   return (
-    <div className="relative w-full h-full bg-gradient-to-br from-background to-card">
-      <ThreeErrorBoundary fallback={<ErrorFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
-          <Canvas className="w-full h-full">
-            <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={50} />
+    <div className="relative w-full h-full bg-gradient-to-br from-background to-card overflow-hidden rounded-2xl">
+      {shouldShowFallback ? (
+        <ErrorFallback />
+      ) : (
+        <div className="absolute inset-0">
+          <TransferMap transferHistory={transferHistory} currentTransfer={currentTransfer} />
+        </div>
+      )}
 
-            {/* Globe */}
-            <Globe3D
-              autoRotate={!isAnimating}
-              rotationSpeed={0.003}
-              activeCountries={activeCountries}
-              transferCounts={transferCounts}
-            />
-
-            {/* Transfer Arcs */}
-            {arcs}
-
-            {/* Camera controls */}
-            <OrbitControls
-              enablePan={false}
-              enableZoom={true}
-              minDistance={5}
-              maxDistance={15}
-              minPolarAngle={Math.PI / 6}
-              maxPolarAngle={Math.PI - Math.PI / 6}
-              autoRotate={!isAnimating}
-              autoRotateSpeed={0.5}
-            />
-          </Canvas>
-        </Suspense>
-      </ThreeErrorBoundary>
-
-      {/* Transfer status overlay */}
       {currentTransfer && (
         <div className="absolute top-4 right-4 space-y-2 z-10">
-          <div className={`px-4 py-2 rounded-lg bg-card/90 backdrop-blur-sm border text-sm transition-all duration-500 ${
-            animationStep >= 1 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'
-          }`}>
+          <div
+            className={`px-4 py-2 rounded-lg bg-card/90 backdrop-blur-sm border text-sm transition-all duration-500 ${
+              animationStep >= 1 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'
+            }`}
+          >
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
               Initiating transfer...
@@ -274,12 +118,9 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({ transferHistory }
         </div>
       )}
 
-      {/* Latest transfer summary */}
       {displayedTransfer && (
-        <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl px-4 py-3 text-xs text-muted-foreground max-w-xs space-y-2 shadow-lg">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
-            Latest transfer
-          </div>
+        <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl px-4 py-3 text-xs text-muted-foreground max-w-xs space-y-2 shadow-lg z-10">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Latest transfer</div>
           <div className="text-sm font-semibold text-foreground">
             {displayedTransfer.fromCountry} → {displayedTransfer.toCountry}
           </div>
@@ -293,10 +134,9 @@ const TransferAnimation: React.FC<TransferAnimationProps> = ({ transferHistory }
         </div>
       )}
 
-      {/* 3D Globe Instructions */}
-      <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-3 py-2 rounded-lg">
+      <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-3 py-2 rounded-lg z-10">
         <div className="flex items-center gap-4">
-          <span>🖱️ Drag to rotate</span>
+          <span>️ Drag to pan</span>
           <span>🔍 Scroll to zoom</span>
         </div>
       </div>
