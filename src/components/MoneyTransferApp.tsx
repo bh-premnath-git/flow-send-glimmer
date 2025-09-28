@@ -123,7 +123,7 @@ const areViewStatesEqual = (a: MapViewState, b: MapViewState) =>
   a.padding?.bottom === b.padding?.bottom &&
   a.padding?.left === b.padding?.left &&
   a.padding?.right === b.padding?.right;
-
+  
 const defaultViewState: MapViewState = {
   longitude: 0,
   latitude: 0,
