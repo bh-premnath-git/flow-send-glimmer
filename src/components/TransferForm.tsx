@@ -32,25 +32,23 @@ const countries = [
   { code: 'CA', name: 'Canada', currency: 'CAD', flag: '🇨🇦' },
   { code: 'AU', name: 'Australia', currency: 'AUD', flag: '🇦🇺' },
   { code: 'DE', name: 'Germany', currency: 'EUR', flag: '🇩🇪' },
-  { code: 'FR', name: 'France', currency: 'EUR', flag: '🇫🇷' },
   { code: 'JP', name: 'Japan', currency: 'JPY', flag: '🇯🇵' },
   { code: 'SG', name: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
   { code: 'AE', name: 'UAE', currency: 'AED', flag: '🇦🇪' },
 ];
-
 const TransferForm: React.FC<TransferFormProps> = ({ onTransferSubmit, isTransferring }) => {
   const [fromCountry, setFromCountry] = useState('UK');
   const [toCountry, setToCountry] = useState('IN');
   const [amount, setAmount] = useState('');
 
-  const fromCountryData = countries.find(c => c.code === fromCountry);
-  const toCountryData = countries.find(c => c.code === toCountry);
+  const fromCountryData = countries.find((c) => c.code === fromCountry);
+  const toCountryData = countries.find((c) => c.code === toCountry);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || parseFloat(amount) <= 0) return;
-    
+
     const transferData: TransferData = {
       fromCountry,
       toCountry,
@@ -58,7 +56,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransferSubmit, isTransfe
       fromCurrency: fromCountryData?.currency || 'USD',
       toCurrency: toCountryData?.currency || 'USD',
     };
-    
+
     onTransferSubmit(transferData);
   };
 
@@ -77,11 +75,9 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransferSubmit, isTransfe
         <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
           Send Money Globally
         </CardTitle>
-        <p className="text-muted-foreground text-sm">
-          Fast, secure, and reliable transfers worldwide
-        </p>
+        <p className="text-muted-foreground text-sm">Fast, secure, and reliable transfers worldwide</p>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* From Country */}
@@ -225,4 +221,4 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransferSubmit, isTransfe
   );
 };
 
-export default TransferForm;
+export default React.memo(TransferForm);

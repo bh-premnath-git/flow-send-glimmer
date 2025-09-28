@@ -102,27 +102,28 @@ const formatRelativeTime = (timestamp: number) => {
   return `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
 };
 
-type MapViewState = ViewState & { width: number; height: number };
+type MapViewState = Pick<ViewState, 'longitude' | 'latitude' | 'zoom' | 'bearing' | 'pitch' | 'padding'>;
 
 const normalizeViewState = (prev: MapViewState, next: ViewState): MapViewState => ({
   ...prev,
-  ...next,
-  width: typeof next.width === 'number' ? next.width : prev.width,
-  height: typeof next.height === 'number' ? next.height : prev.height,
+  longitude: next.longitude ?? prev.longitude,
+  latitude: next.latitude ?? prev.latitude,
+  zoom: next.zoom ?? prev.zoom,
+  bearing: next.bearing ?? prev.bearing,
+  pitch: next.pitch ?? prev.pitch,
+  padding: next.padding ?? prev.padding,
 });
 
-const areViewStatesEqual = (a: MapViewState, b: MapViewState) =>
-  a.longitude === b.longitude &&
-  a.latitude === b.latitude &&
-  a.zoom === b.zoom &&
-  a.bearing === b.bearing &&
-  a.pitch === b.pitch &&
-  a.width === b.width &&
-  a.height === b.height &&
-  a.padding?.top === b.padding?.top &&
-  a.padding?.bottom === b.padding?.bottom &&
-  a.padding?.left === b.padding?.left &&
-  a.padding?.right === b.padding?.right;
+const areViewStatesEqual = (a: MapViewState, b: MapViewState) => {
+  const eq = (x: number, y: number, eps: number) => Math.abs(x - y) <= eps;
+  return (
+    eq(a.longitude, b.longitude, 1e-6) &&
+    eq(a.latitude, b.latitude, 1e-6) &&
+    eq(a.zoom, b.zoom, 1e-3) &&
+    eq(a.bearing ?? 0, b.bearing ?? 0, 1e-3) &&
+    eq(a.pitch ?? 0, b.pitch ?? 0, 1e-3)
+  );
+};
   
 const defaultViewState: MapViewState = {
   longitude: 0,
@@ -131,8 +132,6 @@ const defaultViewState: MapViewState = {
   bearing: 0,
   pitch: 0,
   padding: { top: 0, bottom: 0, left: 0, right: 0 },
-  width: 800,
-  height: 600,
 };
 
 const MoneyTransferApp: React.FC = () => {
@@ -145,6 +144,29 @@ const MoneyTransferApp: React.FC = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const [viewState, setViewState] = useState<MapViewState>(defaultViewState);
   const initialViewStateRef = useRef<MapViewState>(defaultViewState);
+  const isProgrammaticViewChange = useRef(false);
+
+  const setViewStateProgrammatically = useCallback(
+    (updater: (prev: MapViewState) => MapViewState) => {
+      isProgrammaticViewChange.current = true;
+      setViewState((prev) => updater(prev));
+      // Release the guard on the next animation frame to also ignore onMoveEnd after resize/camera events
+      requestAnimationFrame(() => {
+        isProgrammaticViewChange.current = false;
+      });
+    },
+    [],
+  );
+
+  const handleMove = useCallback((event: { viewState: ViewState; originalEvent?: unknown }) => {
+    if (isProgrammaticViewChange.current) return;
+    // Only update on user-initiated camera changes; programmatic/resize events often have no originalEvent
+    if (!event.originalEvent) return;
+    setViewState((prev) => {
+      const next = normalizeViewState(prev, event.viewState);
+      return areViewStatesEqual(prev, next) ? prev : next;
+    });
+  }, []);
 
   const sortedHistory = useMemo(
     () =>
@@ -273,17 +295,16 @@ const MoneyTransferApp: React.FC = () => {
     const maxDistance = Math.max(lonDistance, latDistance);
     const zoom = Math.max(1, 4 - maxDistance / 40);
 
-    setViewState((prev) => {
+    setViewStateProgrammatically((prev) => {
       const next: MapViewState = {
         ...prev,
         longitude: centerLon,
         latitude: centerLat,
         zoom,
       };
-
       return areViewStatesEqual(prev, next) ? prev : next;
     });
-  }, [animatingCoordinates]);
+  }, [animatingCoordinates, setViewStateProgrammatically]);
 
   const handleTransferSubmit = useCallback(
     (transfer: TransferData) => {
@@ -427,14 +448,9 @@ const MoneyTransferApp: React.FC = () => {
             </div>
             <div className="relative h-[28rem] w-full">
               <Map
-                initialViewState={initialViewStateRef.current}
-                viewState={viewState}
-                onMove={(event) => {
-                  setViewState((prev) => {
-                    const next = normalizeViewState(prev, event.viewState);
-                    return areViewStatesEqual(prev, next) ? prev : next;
-                  });
-                }}
+                initialViewState={initialViewStateRef.current as any}
+                viewState={viewState as any}
+                onMoveEnd={handleMove}
                 mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=i0YuPGkp6LqgrBbjaRPx"
                 style={{ width: '100%', height: '100%' }}
               >
